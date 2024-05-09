@@ -36,14 +36,17 @@ import { Response, Robot, User } from "hubot";
 import "dotenv/config";
 
 const triviaScoreKey = "triviaScore";
+const MIN_QUESTION_TIMER = 15;
 const minSkipRequests = process.env.MIN_SKIP_REQUESTS ? +process.env.MIN_SKIP_REQUESTS : null;
 
 class Game {
     currentQ?: Question;
     skipRequests: Array<string> = [];
+    questionTimer?: number;
     validAnswer?: string;
     hintLength = 0;
     questions: Array<Question> = [];
+    _timer: ReturnType<typeof setTimeout>;
 
     constructor(public robot: Robot) {
         const buffer = fs.readFileSync(Path.resolve("./res", "questions.json"), "utf8");
@@ -61,6 +64,9 @@ class Game {
             this.robot.logger.debug("Answer is " + this.currentQ.answer);
             // remove optional portions of answer that are in parens
             this.validAnswer = this.currentQ.answer.replace(/\(.*\)/, "");
+            if (this.questionTimer) {
+                this._timer = setTimeout(this.skipQuestion, this.questionTimer * 1000)
+            }
         }
 
         $question = Cheerio.load("<span>" + this.currentQ.question + "</span>");
@@ -152,6 +158,16 @@ class Game {
             }
         }
     }
+
+    public setTimer(resp: Response, seconds: number) {
+        if (seconds >= MIN_QUESTION_TIMER) {
+            this.robot.logger.debug(`Setting timer to ${seconds}s`)
+            this.questionTimer = seconds;
+            resp.send(`Question timer set to ${seconds} seconds`)
+        } else {
+            resp.send(`Minimum question timer is ${MIN_QUESTION_TIMER} seconds`)
+        }
+    }
 }
 
 interface Question {
@@ -174,4 +190,6 @@ export default function GameSetup(robot: Robot) {
     robot.hear(/^!scores/i, (resp: Response) => game.checkScore(resp, "all"));
 
     robot.hear(/^!h(int)?/, (resp: Response) => game.hint(resp));
+
+    robot.hear(/^!timer (\d+)/i, (resp: Response) => game.setTimer(resp, parseInt(resp.match[1])));
 };
