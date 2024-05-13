@@ -36,17 +36,19 @@ import { Response, Robot, User } from "hubot";
 import "dotenv/config";
 
 const triviaScoreKey = "triviaScore";
-const MIN_QUESTION_TIMER = 15;
+const minTimeToAnswer = process.env.MIN_TIME_TO_ANSWER ? +process.env.MIN_TIME_TO_ANSWER : 5;
 const minSkipRequests = process.env.MIN_SKIP_REQUESTS ? +process.env.MIN_SKIP_REQUESTS : null;
 
 class Game {
     currentQ?: Question;
     skipRequests: Array<string> = [];
-    questionTimer?: number;
+    timeToAnswer: number = 0;
     validAnswer?: string;
     hintLength = 0;
     questions: Array<Question> = [];
-    _timer: ReturnType<typeof setTimeout>;
+    timer?: number;
+    continue: boolean = false;
+    skipCounter: number = 0;
 
     constructor(public robot: Robot) {
         const buffer = fs.readFileSync(Path.resolve("./res", "questions.json"), "utf8");
@@ -61,12 +63,13 @@ class Game {
             this.currentQ = this.questions[index];
             this.hintLength = 1;
             this.skipRequests = [];
+            this.skipCounter = 0;
             this.robot.logger.debug("Answer is " + this.currentQ.answer);
             // remove optional portions of answer that are in parens
             this.validAnswer = this.currentQ.answer.replace(/\(.*\)/, "");
-            if (this.questionTimer) {
-                this._timer = setTimeout(this.skipQuestion, this.questionTimer * 1000)
-            }
+            // reset the timer
+            clearTimeout(this.timer);
+            if (this.timeToAnswer > 0) this.timer = setTimeout(this.skipQuestion, this.timeToAnswer * 1000)
         }
 
         $question = Cheerio.load("<span>" + this.currentQ.question + "</span>");
@@ -85,6 +88,7 @@ class Game {
                 resp.send("The answer is " + this.currentQ.answer + ".");
                 this.currentQ = undefined;
                 this.skipRequests = [];
+                this.skipCounter++;
                 this.hintLength = 0;
                 return this.askQuestion(resp);
             }
@@ -160,12 +164,16 @@ class Game {
     }
 
     public setTimer(resp: Response, seconds: number) {
-        if (seconds >= MIN_QUESTION_TIMER) {
+        if (seconds == 0) {
+            clearTimeout(this.timer);
+            this.timeToAnswer = 0;
+            resp.send(`Question timer disabled`)
+        } else if (seconds >= minTimeToAnswer) {
             this.robot.logger.debug(`Setting timer to ${seconds}s`)
-            this.questionTimer = seconds;
+            this.timeToAnswer = seconds;
             resp.send(`Question timer set to ${seconds} seconds`)
         } else {
-            resp.send(`Minimum question timer is ${MIN_QUESTION_TIMER} seconds`)
+            resp.send(`Minimum question timer is ${minTimeToAnswer} seconds`)
         }
     }
 }

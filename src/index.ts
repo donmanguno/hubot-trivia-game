@@ -11,6 +11,7 @@ const HubotTriviaGame = (robot: Robot & { commands: Array<string>}) => {
     commands.push("!hint or !h - take a hint");
     commands.push("!score <player> - check the score of the player");
     commands.push("!scores or !score all - check the score of all players");
+    commands.push("!timer <seconds> - set the question timer to _n_ seconds (0 to disable)");
 
     return GameSetup(robot as Robot);
 };
